@@ -5,10 +5,14 @@ import android.animation.AnimatorSet
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.*
+import android.os.Handler
+import android.os.Looper
 import android.support.v4.content.ContextCompat
 import android.util.AttributeSet
+import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.SoundEffectConstants
 import android.view.View
 import com.lounah.diary.R
 import com.lounah.diary.util.ViewUtilities
@@ -46,10 +50,69 @@ class BottomNavigationView(context: Context, attributeSet: AttributeSet?, defSty
             val hasDivider: Boolean = true
     )
 
+    enum class FloatingActionButtonState {
+        NORMAL_MODE, IN_ACTION_MODE
+    }
+
+
+    fun hideFab() {
+        fabHideAnimator.start()
+    }
+
+    fun showFab() {
+        fabShowAnimator.start()
+    }
+
+    fun changeFabActionState() {
+        if (currentFabActionMode == FloatingActionButtonState.NORMAL_MODE) {
+            currentFabActionMode = FloatingActionButtonState.IN_ACTION_MODE
+        } else if (currentFabActionMode == FloatingActionButtonState.IN_ACTION_MODE) {
+            currentFabActionMode = FloatingActionButtonState.NORMAL_MODE
+        }
+    }
+
+    fun hideBottomNavigationView() {
+        if (currentMenuState == MenuState.EXPANDED) {
+            shadowAlphaAnimator.start()
+            menuAnimator.start()
+        }
+        hideFab()
+        animate().translationY(DEFAULT_BOTTOM_BAR_HEIGHT.toFloat()).apply {
+            duration = 150
+        }.start()
+    }
+
+    fun showBottomNavigationView() {
+        showFab()
+        animate().translationY(0f).apply {
+            duration = 150
+        }.start()
+    }
+
     ///////////////////////////// VIEW BASE //////////////////////////////////////////
     var onClickListener: OnNavigationIconClickListener? = null
 
     var currentMenuState: MenuState = MenuState.COLLAPSED
+
+    private var currentFabActionMode: FloatingActionButtonState = FloatingActionButtonState.NORMAL_MODE
+        set(newMode) {
+            field = newMode
+            when (newMode) {
+                FloatingActionButtonState.NORMAL_MODE -> {
+                    hideFab()
+                    currentFabCenterX = width / 2f
+                    addActionButtonRect.offset((width / 2 - (width - ViewUtilities.dpToPx(64, context))), 0)
+                    showFab()
+                }
+                FloatingActionButtonState.IN_ACTION_MODE -> {
+                    hideFab()
+                    currentFabCenterX = width - ViewUtilities.dpToPx(64, context).toFloat()
+                    addActionButtonRect.offset(-(width / 2 - (width - ViewUtilities.dpToPx(64, context))), 0)
+                    showFab()
+                }
+            }
+            invalidate()
+        }
 
     var menuItems: List<MenuItem> = emptyList()
         set(newValue) {
@@ -67,13 +130,14 @@ class BottomNavigationView(context: Context, attributeSet: AttributeSet?, defSty
     private val DEFAULT_ADD_ACTION_BUTTON_COLOR = Color.BLACK
     private val DEFAULT_EXPANDED_MENU_SHADOW_COLOR = Color.GRAY
     private val DEFAULT_SHEET_MENU_ITEM_HEIGHT = ViewUtilities.dpToPx(48, context)
-
+    private val DEFAULT_FAB_RADIUS = ViewUtilities.dpToPx(28, context)
 
     ///////////////////////////// ICONS //////////////////////////////////////////
     private val menuNavigationIconDrawable = ContextCompat.getDrawable(context, R.drawable.ic_menu_navigation_24dp)
     private val searchNavigationIconDrawable = ContextCompat.getDrawable(context, R.drawable.ic_search_black_24dp)
     private val dotsNavigationIconDrawable = ContextCompat.getDrawable(context, R.drawable.ic_dots_black_24dp)
     private val plusIconDrawable = ContextCompat.getDrawable(context, R.drawable.ic_add_white_24dp)
+    private val doneIconDrawable = ContextCompat.getDrawable(context, R.drawable.ic_done_white_24dp)
 
     ///////////////////////////// PAINTS //////////////////////////////////////////
     private val bottomViewBackgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -113,6 +177,14 @@ class BottomNavigationView(context: Context, attributeSet: AttributeSet?, defSty
     private lateinit var menuAnimator: ValueAnimator
     private var menuAnimatorLastAnimatedValue = 0f
 
+    private var fabShowAnimator = ValueAnimator.ofFloat(0f, DEFAULT_FAB_RADIUS.toFloat()).apply {
+        duration = 100
+    }
+
+    private var fabHideAnimator = ValueAnimator.ofFloat(0f, DEFAULT_FAB_RADIUS.toFloat()).apply {
+        duration = 100
+    }
+
     ///////////////////////////// CURRENT VIEW INFO //////////////////////////////////////////
     private var expandableMenuCurrentViewY: Float = -1f
         set(newValue) {
@@ -120,10 +192,20 @@ class BottomNavigationView(context: Context, attributeSet: AttributeSet?, defSty
             invalidate()
         }
 
+    private var currentFabRadius: Float = DEFAULT_FAB_RADIUS.toFloat()
+        set(newValue) {
+            field = newValue
+            invalidate()
+        }
+
+    private var currentFabCenterX: Float = 0f
+
     private var addActionButtonWasPressed = false
     private var menuActionButtonWasPressed = false
     private var moreActionButtonWasPressed = false
     private var searchActionButtonWasPressed = false
+
+    private var fabIsShown = true
 
     private var viewIsDirty = true
 
@@ -132,11 +214,18 @@ class BottomNavigationView(context: Context, attributeSet: AttributeSet?, defSty
         shadowAlphaAnimator.addUpdateListener(ShadowAlphaAnimatorUpdateListener())
         shadowAlphaAnimator.addListener(ShadowAlphaAnimatorListener())
 
+        fabShowAnimator.addListener(FabAnimatorListener())
+        fabShowAnimator.addUpdateListener(FabShowAnimatorUpdateListener())
+
+        fabHideAnimator.addListener(FabAnimatorListener())
+        fabHideAnimator.addUpdateListener(FabHideAnimatorUpdateListener())
+
         setOnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     when {
                         ViewUtilities.isMotionEventInRect(menuActionButtonRect, event) -> {
+                            playSoundEffect(SoundEffectConstants.CLICK)
                             menuActionButtonWasPressed = true
                             shadowAlphaAnimator.start()
                             menuAnimator.start()
@@ -152,6 +241,11 @@ class BottomNavigationView(context: Context, attributeSet: AttributeSet?, defSty
 
                             return@setOnTouchListener true
                         }
+                    }
+                    if ((event.y < height - ViewUtilities.dpToPx(290, context))
+                            && (currentMenuState == MenuState.EXPANDED)) {
+                        shadowAlphaAnimator.start()
+                        menuAnimator.start()
                     }
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -189,6 +283,10 @@ class BottomNavigationView(context: Context, attributeSet: AttributeSet?, defSty
     private fun initDefaultValues() {
         if (expandableMenuCurrentViewY == -1f) {
             expandableMenuCurrentViewY = height.toFloat()
+        }
+
+        if (currentFabCenterX == 0f) {
+            currentFabCenterX = width / 2f
         }
 
         menuAnimator = ValueAnimator.ofFloat(0f, ViewUtilities.dpToPx(290, context).toFloat())
@@ -237,14 +335,21 @@ class BottomNavigationView(context: Context, attributeSet: AttributeSet?, defSty
         }
 
         // Add Icon Background
-        canvas.drawCircle(width / 2f,
+        canvas.drawCircle(currentFabCenterX,
                 height - DEFAULT_BOTTOM_BAR_HEIGHT.toFloat(),
-                ViewUtilities.dpToPx(28, context).toFloat(),
+                currentFabRadius,
                 addActionButtonPaint)
 
-        plusIconDrawable?.let {
-            it.bounds = addActionButtonRect
-            it.draw(canvas)
+        if (currentFabActionMode == FloatingActionButtonState.NORMAL_MODE && fabIsShown) {
+            plusIconDrawable?.let {
+                it.bounds = addActionButtonRect
+                it.draw(canvas)
+            }
+        } else if (currentFabActionMode == FloatingActionButtonState.IN_ACTION_MODE && fabIsShown){
+            doneIconDrawable?.let {
+                it.bounds = addActionButtonRect
+                it.draw(canvas)
+            }
         }
 
     }
@@ -253,8 +358,8 @@ class BottomNavigationView(context: Context, attributeSet: AttributeSet?, defSty
         val viewY = height - DEFAULT_BOTTOM_BAR_HEIGHT.toFloat()
         ViewUtilities.drawElevation(
                 leftBounds = 0f,
-                rightBounds = viewY,
-                topBounds = width.toFloat(),
+                topBounds = viewY,
+                rightBounds = width.toFloat(),
                 bottomBounds = viewY,
                 elevationHeight = ViewUtilities.dpToPx(4, context).toFloat(),
                 canvas = canvas,
@@ -304,41 +409,71 @@ class BottomNavigationView(context: Context, attributeSet: AttributeSet?, defSty
             if (currentMenuState == MenuState.COLLAPSED || currentMenuState == MenuState.EXPANDING) {
                 expandedMenuShadowPaint.alpha = delta
                 invalidate()
+            } else {
+                expandedMenuShadowPaint.alpha = 175 - delta
+                invalidate()
             }
         }
     }
+
     private inner class ShadowAlphaAnimatorListener : Animator.AnimatorListener {
         override fun onAnimationRepeat(animation: Animator?) {
 
         }
 
         override fun onAnimationEnd(animation: Animator?) {
-            currentMenuState = MenuState.EXPANDED
+            if (currentMenuState == MenuState.COLLAPSING) {
+                currentMenuState = MenuState.COLLAPSED
+            } else if (currentMenuState == MenuState.EXPANDING) {
+                currentMenuState = MenuState.EXPANDED
+            }
         }
 
         override fun onAnimationCancel(animation: Animator?) {
         }
 
         override fun onAnimationStart(animation: Animator?) {
-            currentMenuState = MenuState.EXPANDING
+            if (currentMenuState == MenuState.COLLAPSED) {
+                currentMenuState = MenuState.EXPANDING
+            } else if (currentMenuState == MenuState.EXPANDED) {
+                currentMenuState = MenuState.COLLAPSING
+            }
         }
     }
+
     private inner class MenuAnimatorUpdateListener : ValueAnimator.AnimatorUpdateListener {
         override fun onAnimationUpdate(animation: ValueAnimator) {
             val animatedValue = animation.animatedValue as Float
-            val delta = abs(menuAnimatorLastAnimatedValue - animatedValue)
             menuAnimatorLastAnimatedValue = animatedValue
-
-            expandableMenuCurrentViewY -= delta
+            if (currentMenuState == MenuState.COLLAPSED || currentMenuState == MenuState.EXPANDING) {
+                expandableMenuCurrentViewY = height - animatedValue
+            } else if (currentMenuState == MenuState.COLLAPSING){
+                expandableMenuCurrentViewY = height - (ViewUtilities.dpToPx(290, context) - animatedValue)
+            }
         }
     }
-    private inner class MenuAnimatorListener : Animator.AnimatorListener {
+
+    private inner class FabShowAnimatorUpdateListener : ValueAnimator.AnimatorUpdateListener {
+        override fun onAnimationUpdate(animation: ValueAnimator) {
+            val animatedValue = animation.animatedValue as Float
+            currentFabRadius = animatedValue
+        }
+    }
+
+    private inner class FabHideAnimatorUpdateListener : ValueAnimator.AnimatorUpdateListener {
+        override fun onAnimationUpdate(animation: ValueAnimator) {
+            val animatedValue = animation.animatedValue as Float
+            currentFabRadius = DEFAULT_FAB_RADIUS - animatedValue
+        }
+    }
+
+    private inner class FabAnimatorListener : Animator.AnimatorListener {
         override fun onAnimationRepeat(animation: Animator?) {
 
         }
 
         override fun onAnimationEnd(animation: Animator?) {
-
+            fabIsShown = !fabIsShown
         }
 
         override fun onAnimationCancel(animation: Animator?) {

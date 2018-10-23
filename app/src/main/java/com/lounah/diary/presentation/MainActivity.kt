@@ -2,6 +2,8 @@ package com.lounah.diary.presentation
 
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.support.design.widget.BottomNavigationView
 import android.widget.Button
 import com.lounah.diary.R
