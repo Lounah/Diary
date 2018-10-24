@@ -1,3 +1,8 @@
 <resources>
+
+    <!-- App -->
     <string name="app_name">Diary</string>
+
+    <!-- My Diary Screen -->
+    <string name="frequently_used_tags">Часто используемые теги</string>
 </resources>

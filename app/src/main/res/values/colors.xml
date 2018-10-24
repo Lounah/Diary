@@ -2,13 +2,45 @@
 <resources>
 
     <!-- Base -->
-    <color name="blue">#1976d2</color>
+    <color name="blue">#1565c0</color>
     <color name="black">#000000</color>
     <color name="grey">#757575</color>
+    <color name="grayLight">#1d000000</color>
+    <color name="white">#FFFFFF</color>
+    <color name="purple">#3f1dcb</color>
+    <color name="yellow">#fdd835</color>
+    <color name="red">#b71c1c</color>
+    <color name="pink">#ba2d65</color>
+    <color name="green">#1b5e20</color>
+    <color name="brown">#e65100</color>
     <color name="elevationColorGradientEnd">#26000000</color>
     <color name="elevationColorGradientStart">#00fdfdfd</color>
 
+    <!-- App -->
     <color name="colorPrimary">#FFFFFF</color>
     <color name="colorPrimaryDark">#000000</color>
     <color name="colorAccent">#FF4081</color>
+
+    <!-- Tag View -->
+
+    <!-- textColor black -->
+    <color name="colorTagPurple">@color/purple</color>
+
+    <!-- textColor black -->
+    <color name="colorTagYellow">@color/yellow</color>
+
+    <!-- textColor white -->
+    <color name="colorTagBlue">@color/blue</color>
+
+    <!-- textColor white -->
+    <color name="colorTagRed">@color/red</color>
+
+    <!-- textColor white -->
+    <color name="colorTagPink">@color/pink</color>
+
+    <!-- textColor white -->
+    <color name="colorTagGreen">@color/green</color>
+
+    <!-- textColor black -->
+    <color name="colorTagBrown">@color/brown</color>
 </resources>
